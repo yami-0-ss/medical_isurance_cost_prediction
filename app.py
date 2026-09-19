@@ -4,276 +4,255 @@ import numpy as np
 import pickle
 import os
 
-# --- Page Configuration ---
+# --- Dashboard Configuration ---
 st.set_page_config(
-    page_title="Health Risk & Claim Analytics",
-    page_icon="🛡️",
+    page_title="Medical Claim Intelligence Hub",
+    page_icon="🏥",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# --- Professional Custom CSS Theme ---
+# --- Executive Aesthetic Stylesheet ---
 st.markdown("""
 <style>
-    :root {
-        --primary: #4F46E5;
-        --primary-light: #818CF8;
-        --bg-color: #0B0F19;
-        --card-bg: #111827;
-        --border-color: #1F2937;
-        --text-color: #F3F4F6;
-        --accent: #06B6D4;
-    }
-    
-    .stApp {
-        background-color: #0B0F19;
-        color: #F3F4F6;
-        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
     }
 
-    /* Header Banner */
-    .hero-banner {
-        background: linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #0F172A 100%);
-        padding: 2.2rem 2.5rem;
-        border-radius: 16px;
-        border: 1px solid #3730A3;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-        margin-bottom: 2rem;
+    .stApp {
+        background: radial-gradient(circle at top right, #0d1f2d, #050b14 80%);
+        color: #e2e8f0;
     }
-    
+
+    /* Top Hero Banner */
+    .hero-card {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(14, 116, 144, 0.15) 100%);
+        border: 1px solid rgba(45, 212, 191, 0.25);
+        border-radius: 16px;
+        padding: 24px 30px;
+        margin-bottom: 24px;
+        backdrop-filter: blur(10px);
+    }
     .hero-title {
-        font-size: 2.1rem;
-        font-weight: 700;
-        letter-spacing: -0.025em;
-        color: #FFFFFF;
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        background: linear-gradient(90deg, #34d399, #38bdf8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
         margin: 0;
     }
-    
-    .hero-sub {
-        color: #94A3B8;
-        font-size: 0.98rem;
-        margin-top: 0.5rem;
+    .hero-desc {
+        color: #94a3b8;
+        font-size: 14px;
+        margin-top: 6px;
         margin-bottom: 0;
     }
 
-    /* Section Cards */
-    .form-card {
-        background: #111827;
-        border: 1px solid #1F2937;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1.25rem;
-    }
-    
-    .section-header {
-        color: #38BDF8;
-        font-size: 1.05rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 1.25rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        border-bottom: 1px solid #1E293B;
-        padding-bottom: 0.5rem;
-    }
-
-    /* Metrics & Results */
-    .metric-container {
-        background: radial-gradient(circle at top, #1E1B4B 0%, #0F172A 100%);
-        border: 1px solid #6366F1;
-        border-radius: 14px;
-        padding: 2rem;
-        text-align: center;
-        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.2);
-    }
-
-    .metric-value {
-        font-size: 2.8rem;
-        font-weight: 800;
-        color: #38BDF8;
-        letter-spacing: -0.02em;
-    }
-
-    .metric-caption {
-        font-size: 0.9rem;
-        color: #94A3B8;
+    /* Section Subheadings */
+    .group-label {
+        font-size: 13px;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.08em;
+        color: #38bdf8;
+        border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+        padding-bottom: 6px;
+        margin-bottom: 16px;
     }
 
-    /* Streamlit Button Customization */
-    div.stButton > button {
-        background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
-        color: #FFFFFF;
-        border: none;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        font-size: 1.05rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
-        transition: all 0.2s ease-in-out;
-        width: 100%;
+    /* Result Metric Display */
+    .metric-panel {
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(8, 14, 26, 0.95));
+        border: 2px solid #10b981;
+        border-radius: 18px;
+        padding: 28px;
+        text-align: center;
+        box-shadow: 0 12px 36px rgba(16, 185, 129, 0.18);
     }
-    
+    .metric-header {
+        font-size: 13px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+    .metric-number {
+        font-size: 42px;
+        font-weight: 800;
+        color: #34d399;
+        margin: 10px 0;
+        letter-spacing: -0.03em;
+    }
+
+    /* Action Button */
+    div.stButton > button {
+        background: linear-gradient(90deg, #059669 0%, #0284c7 100%);
+        color: #ffffff !important;
+        font-weight: 700;
+        font-size: 16px;
+        padding: 12px 28px;
+        border: none;
+        border-radius: 10px;
+        width: 100%;
+        transition: all 0.25s ease;
+        box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);
+    }
     div.stButton > button:hover {
-        opacity: 0.95;
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(2, 132, 199, 0.45);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Load Pretrained Model ---
+# --- Model Loader ---
 @st.cache_resource
-def load_rf_model():
-    model_filename = "RandomForest_model.pkl"
-    if not os.path.exists(model_filename):
-        st.error(f"Error: `{model_filename}` was not found in the root directory.")
-        return None
-    with open(model_filename, "rb") as f:
-        return pickle.load(f)
+def get_model():
+    model_path = "RandomForest_model.pkl"
+    if not os.path.exists(model_path):
+        return None, f"File `{model_path}` was not found in the root repository."
+    try:
+        with open(model_path, "rb") as f:
+            loaded_model = pickle.load(f)
+        return loaded_model, None
+    except Exception as err:
+        return None, f"Deserialization Error: {str(err)}"
 
-model = load_rf_model()
+model, load_err = get_model()
 
-# --- Application Header ---
+# --- Header ---
 st.markdown("""
-<div class="hero-banner">
-    <h1 class="hero-title">🛡️ Health Claim & Cost Intelligence</h1>
-    <p class="hero-sub">Random Forest Predictive Engine • Multi-Variable Clinical & Actuarial Assessment</p>
+<div class="hero-card">
+    <h1 class="hero-title">Medical Risk & Insurance Cost Estimator</h1>
+    <p class="hero-desc">Actuarial Risk Prediction Dashboard powered by Ensembled Decision Trees</p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- Feature Input Tabs ---
-tab_profile, tab_clinical, tab_policy, tab_proc = st.tabs([
-    "👤 Profile & Demographics", 
-    "🩺 Clinical & Vitals", 
-    "📜 Policy & Financials", 
-    "🔬 Chronic & Procedures"
+if load_err:
+    st.error(load_err)
+    st.info("Ensure `RandomForest_model.pkl` is committed directly to your repository root.")
+
+# --- Tab Layout ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Demographics & Socioeconomic",
+    "Clinical & Vital Statistics",
+    "Insurance Policy & History",
+    "Conditions & Utilization"
 ])
 
-# Input state collection
-user_inputs = {}
+inputs = {}
 
-with tab_profile:
-    st.markdown('<div class="section-header">Demographic & Socioeconomic Markers</div>', unsafe_allow_html=True)
+with tab1:
+    st.markdown('<div class="group-label">Demographic Markers</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
-        user_inputs["age"] = st.number_input("Age", min_value=0, max_value=110, value=38)
-        user_inputs["sex"] = st.selectbox("Sex", options=[0, 1], format_func=lambda x: "Female" if x == 0 else "Male")
-        user_inputs["region"] = st.selectbox("Region Code", options=[0, 1, 2, 3], format_func=lambda x: f"Region {x+1}")
+        inputs["age"] = st.number_input("Age", 0, 110, 35)
+        inputs["sex"] = st.selectbox("Sex", [0, 1], format_func=lambda x: "Female" if x == 0 else "Male")
+        inputs["region"] = st.selectbox("Geographic Region", [0, 1, 2, 3], format_func=lambda x: f"Region {x+1}")
     with c2:
-        user_inputs["urban_rural"] = st.selectbox("Living Area", options=[0, 1], format_func=lambda x: "Rural" if x == 0 else "Urban")
-        user_inputs["income"] = st.number_input("Annual Income ($)", min_value=0.0, max_value=500000.0, value=55000.0, step=1000.0)
-        user_inputs["education"] = st.selectbox("Education Level", options=[0, 1, 2, 3], format_func=lambda x: ["High School", "Bachelor", "Master", "PhD"][x])
+        inputs["urban_rural"] = st.selectbox("Residence Environment", [0, 1], format_func=lambda x: "Rural" if x == 0 else "Urban")
+        inputs["income"] = st.number_input("Annual Income ($)", 0.0, 1000000.0, 52000.0, 2500.0)
+        inputs["education"] = st.selectbox("Education Level", [0, 1, 2, 3], format_func=lambda x: ["High School", "Bachelor", "Master", "PhD"][x])
     with c3:
-        user_inputs["marital_status"] = st.selectbox("Marital Status", options=[0, 1], format_func=lambda x: "Single" if x == 0 else "Married")
-        user_inputs["employment_status"] = st.selectbox("Employment Status", options=[0, 1, 2], format_func=lambda x: ["Unemployed", "Employed", "Self-Employed"][x])
-        user_inputs["household_size"] = st.number_input("Household Size", min_value=1, max_value=15, value=3)
-        user_inputs["dependents"] = st.number_input("Dependents", min_value=0, max_value=10, value=1)
+        inputs["marital_status"] = st.selectbox("Marital Status", [0, 1], format_func=lambda x: "Single" if x == 0 else "Married")
+        inputs["employment_status"] = st.selectbox("Employment", [0, 1, 2], format_func=lambda x: ["Unemployed", "Employed", "Self-Employed"][x])
+        inputs["household_size"] = st.number_input("Household Size", 1, 15, 3)
+        inputs["dependents"] = st.number_input("Number of Dependents", 0, 10, 1)
 
-with tab_clinical:
-    st.markdown('<div class="section-header">Biometrics & Clinical History</div>', unsafe_allow_html=True)
+with tab2:
+    st.markdown('<div class="group-label">Vitals & Health Metrics</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
-        user_inputs["bmi"] = st.number_input("BMI (kg/m²)", min_value=10.0, max_value=60.0, value=25.4, step=0.1)
-        user_inputs["smoker"] = st.selectbox("Smoker", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes")
-        user_inputs["alcohol_freq"] = st.selectbox("Alcohol Consumption Frequency", options=[0, 1, 2, 3], format_func=lambda x: ["None", "Occasional", "Moderate", "Frequent"][x])
-        user_inputs["risk_score"] = st.slider("Clinical Risk Score", min_value=0.0, max_value=100.0, value=24.5, step=0.1)
+        inputs["bmi"] = st.number_input("BMI (kg/m²)", 10.0, 65.0, 24.8, 0.1)
+        inputs["smoker"] = st.selectbox("Smoking Status", [0, 1], format_func=lambda x: "Non-Smoker" if x == 0 else "Smoker")
+        inputs["alcohol_freq"] = st.selectbox("Alcohol Frequency", [0, 1, 2, 3], format_func=lambda x: ["None", "Occasional", "Moderate", "Frequent"][x])
+        inputs["risk_score"] = st.slider("Clinical Risk Score", 0.0, 100.0, 22.0, 0.5)
     with c2:
-        user_inputs["systolic_bp"] = st.number_input("Systolic BP (mmHg)", min_value=70, max_value=220, value=120)
-        user_inputs["diastolic_bp"] = st.number_input("Diastolic BP (mmHg)", min_value=40, max_value=140, value=80)
-        user_inputs["ldl"] = st.number_input("LDL Cholesterol (mg/dL)", min_value=40.0, max_value=300.0, value=100.0, step=1.0)
-        user_inputs["hba1c"] = st.number_input("HbA1c (%)", min_value=3.0, max_value=16.0, value=5.5, step=0.1)
+        inputs["systolic_bp"] = st.number_input("Systolic BP (mmHg)", 70, 240, 120)
+        inputs["diastolic_bp"] = st.number_input("Diastolic BP (mmHg)", 40, 150, 80)
+        inputs["ldl"] = st.number_input("LDL (mg/dL)", 30.0, 350.0, 105.0, 1.0)
+        inputs["hba1c"] = st.number_input("HbA1c (%)", 3.0, 18.0, 5.4, 0.1)
     with c3:
-        user_inputs["visits_last_year"] = st.number_input("Clinic Visits (Last Year)", min_value=0, max_value=50, value=2)
-        user_inputs["hospitalizations_last_3yrs"] = st.number_input("Hospitalizations (Last 3 Yrs)", min_value=0, max_value=20, value=0)
-        user_inputs["days_hospitalized_last_3yrs"] = st.number_input("Days Hospitalized (Last 3 Yrs)", min_value=0, max_value=120, value=0)
-        user_inputs["medication_count"] = st.number_input("Active Prescription Medications", min_value=0, max_value=30, value=1)
+        inputs["visits_last_year"] = st.number_input("Visits (Past 12 Mo)", 0, 60, 2)
+        inputs["hospitalizations_last_3yrs"] = st.number_input("Hospitalizations (Past 3 Yrs)", 0, 25, 0)
+        inputs["days_hospitalized_last_3yrs"] = st.number_input("Hospital Days (Past 3 Yrs)", 0, 150, 0)
+        inputs["medication_count"] = st.number_input("Active Prescriptions", 0, 30, 1)
 
-with tab_policy:
-    st.markdown('<div class="section-header">Insurance Policy & Claims History</div>', unsafe_allow_html=True)
+with tab3:
+    st.markdown('<div class="group-label">Coverage & Claims</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
-        user_inputs["plan_type"] = st.selectbox("Plan Type", options=[0, 1, 2], format_func=lambda x: ["Bronze", "Silver", "Gold"][x])
-        user_inputs["network_tier"] = st.selectbox("Network Tier", options=[0, 1, 2], format_func=lambda x: ["Tier 1", "Tier 2", "Tier 3"][x])
-        user_inputs["provider_quality"] = st.slider("Provider Quality Rating", min_value=1.0, max_value=5.0, value=4.0, step=0.1)
+        inputs["plan_type"] = st.selectbox("Policy Tier", [0, 1, 2], format_func=lambda x: ["Bronze", "Silver", "Gold"][x])
+        inputs["network_tier"] = st.selectbox("Network Coverage", [0, 1, 2], format_func=lambda x: ["Tier 1 (In-Network)", "Tier 2", "Tier 3"][x])
+        inputs["provider_quality"] = st.slider("Provider Rating", 1.0, 5.0, 4.2, 0.1)
     with c2:
-        user_inputs["deductible"] = st.number_input("Deductible ($)", min_value=0.0, max_value=10000.0, value=1500.0, step=100.0)
-        user_inputs["copay"] = st.number_input("Copay ($)", min_value=0.0, max_value=500.0, value=30.0, step=5.0)
-        user_inputs["policy_term_years"] = st.number_input("Policy Term (Years)", min_value=1, max_value=30, value=3)
-        user_inputs["policy_changes_last_2yrs"] = st.number_input("Policy Changes (Last 2 Yrs)", min_value=0, max_value=10, value=0)
+        inputs["deductible"] = st.number_input("Deductible ($)", 0.0, 20000.0, 1500.0, 250.0)
+        inputs["copay"] = st.number_input("Copay ($)", 0.0, 500.0, 35.0, 5.0)
+        inputs["policy_term_years"] = st.number_input("Tenure (Years)", 1, 35, 3)
+        inputs["policy_changes_last_2yrs"] = st.number_input("Plan Alterations (2 Yrs)", 0, 10, 0)
     with c3:
-        user_inputs["annual_premium"] = st.number_input("Annual Premium ($)", min_value=0.0, max_value=50000.0, value=4800.0, step=100.0)
-        user_inputs["monthly_premium"] = st.number_input("Monthly Premium ($)", min_value=0.0, max_value=5000.0, value=400.0, step=10.0)
-        user_inputs["claims_count"] = st.number_input("Historical Claims Count", min_value=0, max_value=50, value=1)
-        user_inputs["avg_claim_amount"] = st.number_input("Avg Historical Claim ($)", min_value=0.0, max_value=100000.0, value=1200.0, step=100.0)
-        user_inputs["total_claims_paid"] = st.number_input("Total Claims Paid ($)", min_value=0.0, max_value=500000.0, value=1200.0, step=250.0)
+        inputs["annual_premium"] = st.number_input("Annual Premium ($)", 0.0, 50000.0, 4600.0, 200.0)
+        inputs["monthly_premium"] = st.number_input("Monthly Premium ($)", 0.0, 5000.0, 385.0, 20.0)
+        inputs["claims_count"] = st.number_input("Prior Claims Count", 0, 50, 1)
+        inputs["avg_claim_amount"] = st.number_input("Average Claim Value ($)", 0.0, 100000.0, 1100.0, 100.0)
+        inputs["total_claims_paid"] = st.number_input("Total Historical Claims ($)", 0.0, 500000.0, 1100.0, 250.0)
 
-with tab_proc:
-    st.markdown('<div class="section-header">Chronic Illnesses & Medical Procedures</div>', unsafe_allow_html=True)
+with tab4:
+    st.markdown('<div class="group-label">Diagnoses & Clinical Procedures</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
-        st.write("**Chronic Diagnoses**")
-        user_inputs["hypertension"] = st.checkbox("Hypertension", value=False)
-        user_inputs["diabetes"] = st.checkbox("Diabetes", value=False)
-        user_inputs["asthma"] = st.checkbox("Asthma", value=False)
-        user_inputs["copd"] = st.checkbox("COPD", value=False)
-        user_inputs["cardiovascular_disease"] = st.checkbox("Cardiovascular Disease", value=False)
-        user_inputs["cancer_history"] = st.checkbox("Cancer History", value=False)
-        user_inputs["kidney_disease"] = st.checkbox("Kidney Disease", value=False)
-        user_inputs["liver_disease"] = st.checkbox("Liver Disease", value=False)
-        user_inputs["arthritis"] = st.checkbox("Arthritis", value=False)
-        user_inputs["mental_health"] = st.checkbox("Mental Health Condition", value=False)
+        st.caption("Active Diagnoses")
+        inputs["hypertension"] = int(st.checkbox("Hypertension", False))
+        inputs["diabetes"] = int(st.checkbox("Diabetes", False))
+        inputs["asthma"] = int(st.checkbox("Asthma", False))
+        inputs["copd"] = int(st.checkbox("COPD", False))
+        inputs["cardiovascular_disease"] = int(st.checkbox("Cardiovascular Condition", False))
+        inputs["cancer_history"] = int(st.checkbox("History of Cancer", False))
+        inputs["kidney_disease"] = int(st.checkbox("Kidney Disease", False))
+        inputs["liver_disease"] = int(st.checkbox("Liver Disease", False))
+        inputs["arthritis"] = int(st.checkbox("Arthritis", False))
+        inputs["mental_health"] = int(st.checkbox("Mental Health Condition", False))
         
-        # Calculate chronic count automatically
-        chronic_keys = ["hypertension", "diabetes", "asthma", "copd", "cardiovascular_disease", 
+        chronic_keys = ["hypertension", "diabetes", "asthma", "copd", "cardiovascular_disease",
                         "cancer_history", "kidney_disease", "liver_disease", "arthritis", "mental_health"]
-        user_inputs["chronic_count"] = sum([int(user_inputs[k]) for k in chronic_keys])
-        
+        inputs["chronic_count"] = sum([inputs[k] for k in chronic_keys])
     with c2:
-        st.write("**Procedure Utilization & Flags**")
-        user_inputs["proc_imaging_count"] = st.number_input("Imaging Procedures Count", min_value=0, max_value=20, value=0)
-        user_inputs["proc_surgery_count"] = st.number_input("Surgery Procedures Count", min_value=0, max_value=10, value=0)
-        user_inputs["proc_physio_count"] = st.number_input("Physiotherapy Sessions", min_value=0, max_value=50, value=0)
-        user_inputs["proc_consult_count"] = st.number_input("Consultations Count", min_value=0, max_value=50, value=1)
-        user_inputs["proc_lab_count"] = st.number_input("Lab Test Count", min_value=0, max_value=50, value=2)
-        user_inputs["is_high_risk"] = st.selectbox("High Risk Categorization", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes")
-        user_inputs["had_major_procedure"] = st.selectbox("Had Major Procedure", options=[0, 1], format_func=lambda x: "No" if x == 0 else "Yes")
-
-# Convert booleans to binary integers
-for k, v in user_inputs.items():
-    if isinstance(v, bool):
-        user_inputs[k] = int(v)
+        st.caption("Medical Services & Utilization")
+        inputs["proc_imaging_count"] = st.number_input("Imaging Tests", 0, 25, 0)
+        inputs["proc_surgery_count"] = st.number_input("Surgical Procedures", 0, 15, 0)
+        inputs["proc_physio_count"] = st.number_input("Physiotherapy Sessions", 0, 50, 0)
+        inputs["proc_consult_count"] = st.number_input("Specialist Consultations", 0, 50, 1)
+        inputs["proc_lab_count"] = st.number_input("Laboratory Panels", 0, 50, 2)
+        inputs["is_high_risk"] = st.selectbox("Underwriting High Risk Flag", [0, 1], format_func=lambda x: "No" if x == 0 else "Yes")
+        inputs["had_major_procedure"] = st.selectbox("Recent Major Procedure", [0, 1], format_func=lambda x: "No" if x == 0 else "Yes")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- Predict Execution ---
-c_btn, _ = st.columns([1, 2])
-with c_btn:
-    run_prediction = st.button("🚀 Calculate Model Prediction")
+# --- Predict Section ---
+col_act, col_info = st.columns([1, 2])
+with col_act:
+    calculate = st.button("⚡ Generate Cost Prediction")
 
-if run_prediction:
-    if model is not None:
+if calculate:
+    if model is None:
+        st.error("Model unavailable. Please verify model file status.")
+    else:
         try:
-            # Enforce exact feature order expected by the model
-            feature_order = list(model.feature_names_in_)
-            input_df = pd.DataFrame([[user_inputs[col] for col in feature_order]], columns=feature_order)
+            # Reorder strictly based on training signatures
+            ordered_cols = list(model.feature_names_in_)
+            row = [inputs[feat] for feat in ordered_cols]
+            df_input = pd.DataFrame([row], columns=ordered_cols)
             
-            prediction = model.predict(input_df)[0]
+            output = model.predict(df_input)[0]
             
-            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown(f"""
-            <div class="metric-container">
-                <div class="metric-caption">Predicted Target Value / Estimated Cost</div>
-                <div class="metric-value">${prediction:,.2f}</div>
-                <p style="color: #94A3B8; margin-top: 0.5rem; font-size: 0.88rem;">Evaluated across 50 Decision Trees • Scikit-Learn Random Forest Engine</p>
+            <div class="metric-panel">
+                <div class="metric-header">Estimated Actuarial Cost</div>
+                <div class="metric-number">${output:,.2f}</div>
+                <div style="color: #94a3b8; font-size: 13px;">Inference generated across 50 Decision Trees</div>
             </div>
             """, unsafe_allow_html=True)
-            
-            with st.expander("🔍 View Processed Feature Array"):
-                st.dataframe(input_df, use_container_width=True)
-                
         except Exception as e:
-            st.error(f"Inference Error: {str(e)}")
+            st.error(f"Inference Failure: {str(e)}")
