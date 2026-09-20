@@ -1,179 +1,22 @@
-import streamlit as st
+import os
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
-import plotly.graph_objects as go
-import plotly.express as px
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
-# ---------------------------------------------------------
-# Page Configuration & Styling
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="Health Risk & Claims Intelligence",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+app = FastAPI(title="Risk & Claims Intelligence Dashboard")
 
-st.markdown("""
-<style>
-    /* Global Styles */
-    .stApp {
-        background-color: #0A0E17;
-        color: #E2E8F0;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Header Card */
-    .hero-banner {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F766E 100%);
-        border: 1px solid rgba(6, 182, 212, 0.25);
-        border-radius: 16px;
-        padding: 24px 32px;
-        margin-bottom: 24px;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-    }
-    .hero-title {
-        color: #F8FAFC;
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
-    .hero-subtitle {
-        color: #94A3B8;
-        font-size: 1rem;
-    }
-    
-    /* Metric Result Box */
-    .prediction-box {
-        background: radial-gradient(circle at top right, rgba(6, 182, 212, 0.15), rgba(15, 23, 42, 0.95));
-        border: 1px solid #06B6D4;
-        border-radius: 16px;
-        padding: 28px;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    .prediction-val {
-        font-size: 2.75rem;
-        font-weight: 800;
-        color: #38BDF8;
-        text-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
-    }
-    .risk-badge {
-        display: inline-block;
-        padding: 6px 16px;
-        border-radius: 9999px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        margin-top: 8px;
-    }
-    
-    /* Sidebar Styling */
-    section[data-testid="stSidebar"] {
-        background-color: #0B1120;
-        border-right: 1px solid #1E293B;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Load model safely
+model = None
+try:
+    model = joblib.load("RandomForest_model.pkl")
+    print("RandomForest_model.pkl loaded successfully.")
+except Exception as err:
+    print(f"Warning: Model could not be loaded at startup: {err}")
 
-# ---------------------------------------------------------
-# Load Model
-# ---------------------------------------------------------
-@st.cache_resource
-def load_model():
-    try:
-        return joblib.load("RandomForest_model.pkl")
-    except Exception as e:
-        st.error(f"Error loading RandomForest_model.pkl: {e}")
-        return None
-
-model = load_model()
-
-# ---------------------------------------------------------
-# Hero Banner
-# ---------------------------------------------------------
-st.markdown("""
-<div class="hero-banner">
-    <div class="hero-title">🛡️ Health & Insurance Risk Analytics</div>
-    <div class="hero-subtitle">Random Forest Regressor inference pipeline with real-time risk simulation and radar analysis.</div>
-</div>
-""", unsafe_allow_html=True)
-
-# ---------------------------------------------------------
-# Sidebar: Feature Inputs
-# ---------------------------------------------------------
-st.sidebar.header("⚙️ Patient & Policy Profile")
-
-with st.sidebar.expander("👤 Demographics & Lifestyle", expanded=True):
-    age = st.slider("Age", 18, 100, 42)
-    sex = st.selectbox("Sex", options=[0, 1], format_func=lambda x: "Female" if x == 0 else "Male")
-    region = st.selectbox("Region", options=[0, 1, 2, 3], format_func=lambda x: ["North", "South", "East", "West"][x])
-    urban_rural = st.selectbox("Area Type", options=[0, 1], format_func=lambda x: "Rural" if x == 0 else "Urban")
-    income = st.number_input("Annual Income ($)", min_value=5000, max_value=500000, value=55000, step=2500)
-    education = st.selectbox("Education Tier", options=[0, 1, 2, 3], format_func=lambda x: ["High School", "Bachelors", "Masters", "Doctorate"][x])
-    marital_status = st.selectbox("Marital Status", options=[0, 1], format_func=lambda x: "Single" if x == 0 else "Married")
-    employment_status = st.selectbox("Employment", options=[0, 1, 2], format_func=lambda x: ["Employed", "Self-Employed", "Unemployed"][x])
-    household_size = st.slider("Household Size", 1, 10, 3)
-    dependents = st.slider("Dependents", 0, 8, 1)
-
-with st.sidebar.expander("🩺 Vitals & Clinical Metrics", expanded=False):
-    bmi = st.slider("BMI", 15.0, 55.0, 27.4, 0.1)
-    systolic_bp = st.slider("Systolic BP (mmHg)", 90, 200, 125)
-    diastolic_bp = st.slider("Diastolic BP (mmHg)", 60, 130, 82)
-    ldl = st.slider("LDL Cholesterol", 50, 300, 120)
-    hba1c = st.slider("HbA1c (%)", 4.0, 14.0, 5.8, 0.1)
-    smoker = st.selectbox("Smoker Status", options=[0, 1], format_func=lambda x: "Non-Smoker" if x == 0 else "Smoker")
-    alcohol_freq = st.slider("Alcohol Freq (Days/Wk)", 0, 7, 2)
-    visits_last_year = st.slider("Doctor Visits (Last Yr)", 0, 25, 3)
-    hospitalizations_last_3yrs = st.slider("Hospitalizations (3 Yrs)", 0, 10, 0)
-    days_hospitalized_last_3yrs = st.slider("Days in Hospital (3 Yrs)", 0, 60, 0)
-    medication_count = st.slider("Prescription Meds Count", 0, 20, 2)
-
-with st.sidebar.expander("📄 Policy & Coverage Details", expanded=False):
-    plan_type = st.selectbox("Plan Type", [0, 1, 2], format_func=lambda x: ["Bronze", "Silver", "Gold"][x])
-    network_tier = st.selectbox("Network Tier", [0, 1, 2], format_func=lambda x: ["Standard", "Preferred", "Elite"][x])
-    deductible = st.number_input("Deductible ($)", 0, 15000, 1500, 250)
-    copay = st.number_input("Copay ($)", 0, 200, 30, 5)
-    policy_term_years = st.slider("Policy Term (Years)", 1, 30, 5)
-    policy_changes_last_2yrs = st.slider("Policy Changes (2 Yrs)", 0, 5, 0)
-    provider_quality = st.slider("Provider Quality Rating", 1.0, 5.0, 3.8, 0.1)
-    risk_score = st.slider("Internal Risk Score", 0.0, 100.0, 34.5, 0.5)
-    annual_premium = st.number_input("Annual Premium ($)", 500, 50000, 4200, 100)
-    monthly_premium = annual_premium / 12.0
-    claims_count = st.slider("Claims Count", 0, 25, 2)
-    avg_claim_amount = st.number_input("Avg Claim Amount ($)", 0, 100000, 1200, 100)
-    total_claims_paid = claims_count * avg_claim_amount
-
-with st.sidebar.expander("🏥 Conditions & Clinical Procedures", expanded=False):
-    col_c1, col_c2 = st.columns(2)
-    hypertension = col_c1.checkbox("Hypertension", False)
-    diabetes = col_c2.checkbox("Diabetes", False)
-    asthma = col_c1.checkbox("Asthma", False)
-    copd = col_c2.checkbox("COPD", False)
-    cardiovascular_disease = col_c1.checkbox("Cardiovascular", False)
-    cancer_history = col_c2.checkbox("Cancer History", False)
-    kidney_disease = col_c1.checkbox("Kidney Disease", False)
-    liver_disease = col_c2.checkbox("Liver Disease", False)
-    arthritis = col_c1.checkbox("Arthritis", False)
-    mental_health = col_c2.checkbox("Mental Health", False)
-    
-    chronic_count = sum([hypertension, diabetes, asthma, copd, cardiovascular_disease, 
-                         cancer_history, kidney_disease, liver_disease, arthritis, mental_health])
-    
-    proc_imaging_count = st.slider("Imaging Tests", 0, 10, 1)
-    proc_surgery_count = st.slider("Surgeries", 0, 5, 0)
-    proc_physio_count = st.slider("Physiotherapy Sessions", 0, 30, 0)
-    proc_consult_count = st.slider("Specialist Consultations", 0, 20, 2)
-    proc_lab_count = st.slider("Lab Tests", 0, 30, 3)
-    
-    is_high_risk = 1 if (risk_score > 60 or chronic_count >= 3) else 0
-    had_major_procedure = 1 if proc_surgery_count > 0 else 0
-
-# ---------------------------------------------------------
-# Feature Array Construction (Order matches model)
-# ---------------------------------------------------------
-ordered_features = [
+ORDERED_FEATURES = [
     "age", "sex", "region", "urban_rural", "income", "education", "marital_status",
     "employment_status", "household_size", "dependents", "bmi", "smoker", "alcohol_freq",
     "visits_last_year", "hospitalizations_last_3yrs", "days_hospitalized_last_3yrs",
@@ -186,137 +29,392 @@ ordered_features = [
     "proc_physio_count", "proc_consult_count", "proc_lab_count", "is_high_risk", "had_major_procedure"
 ]
 
-input_data = [
-    age, int(sex), int(region), int(urban_rural), float(income), int(education), int(marital_status),
-    int(employment_status), int(household_size), int(dependents), float(bmi), int(smoker), int(alcohol_freq),
-    int(visits_last_year), int(hospitalizations_last_3yrs), int(days_hospitalized_last_3yrs),
-    int(medication_count), float(systolic_bp), float(diastolic_bp), float(ldl), float(hba1c), int(plan_type),
-    int(network_tier), float(deductible), float(copay), int(policy_term_years), int(policy_changes_last_2yrs),
-    float(provider_quality), float(risk_score), float(annual_premium), float(monthly_premium), int(claims_count),
-    float(avg_claim_amount), float(total_claims_paid), int(chronic_count), int(hypertension), int(diabetes),
-    int(asthma), int(copd), int(cardiovascular_disease), int(cancer_history), int(kidney_disease),
-    int(liver_disease), int(arthritis), int(mental_health), int(proc_imaging_count), int(proc_surgery_count),
-    int(proc_physio_count), int(proc_consult_count), int(proc_lab_count), int(is_high_risk), int(had_major_procedure)
-]
+class PatientPayload(BaseModel):
+    age: float = 42
+    sex: int = 1
+    region: int = 1
+    urban_rural: int = 1
+    income: float = 55000.0
+    education: int = 1
+    marital_status: int = 1
+    employment_status: int = 0
+    household_size: int = 3
+    dependents: int = 1
+    bmi: float = 27.4
+    smoker: int = 0
+    alcohol_freq: int = 2
+    visits_last_year: int = 3
+    hospitalizations_last_3yrs: int = 0
+    days_hospitalized_last_3yrs: int = 0
+    medication_count: int = 2
+    systolic_bp: float = 125.0
+    diastolic_bp: float = 82.0
+    ldl: float = 120.0
+    hba1c: float = 5.8
+    plan_type: int = 1
+    network_tier: int = 1
+    deductible: float = 1500.0
+    copay: float = 30.0
+    policy_term_years: int = 5
+    policy_changes_last_2yrs: int = 0
+    provider_quality: float = 3.8
+    risk_score: float = 34.5
+    annual_premium: float = 4200.0
+    claims_count: int = 2
+    avg_claim_amount: float = 1200.0
+    hypertension: int = 0
+    diabetes: int = 0
+    asthma: int = 0
+    copd: int = 0
+    cardiovascular_disease: int = 0
+    cancer_history: int = 0
+    kidney_disease: int = 0
+    liver_disease: int = 0
+    arthritis: int = 0
+    mental_health: int = 0
+    proc_imaging_count: int = 1
+    proc_surgery_count: int = 0
+    proc_physio_count: int = 0
+    proc_consult_count: int = 2
+    proc_lab_count: int = 3
 
-input_df = pd.DataFrame([input_data], columns=ordered_features)
-
-# ---------------------------------------------------------
-# Prediction & Inference
-# ---------------------------------------------------------
-if model is not None:
-    try:
-        prediction = float(model.predict(input_df)[0])
-    except Exception:
-        prediction = float(model.predict(np.array([input_data]))[0])
-else:
-    prediction = 3450.80
-
-# ---------------------------------------------------------
-# Dashboard Main Layout
-# ---------------------------------------------------------
-col_pred, col_metrics = st.columns([1.1, 1.9])
-
-with col_pred:
-    badge_bg = "#EF4444" if prediction > 10000 else ("#F59E0B" if prediction > 4500 else "#10B981")
-    badge_label = "High Impact" if prediction > 10000 else ("Moderate Impact" if prediction > 4500 else "Standard Risk")
+@app.post("/predict")
+def predict(payload: PatientPayload):
+    p = payload.dict()
+    monthly_premium = p["annual_premium"] / 12.0
+    total_claims_paid = p["claims_count"] * p["avg_claim_amount"]
     
-    st.markdown(f"""
-    <div class="prediction-box">
-        <div style="color: #94A3B8; font-size: 0.95rem; font-weight: 500;">MODEL PREDICTION OUTPUT</div>
-        <div class="prediction-val">${prediction:,.2f}</div>
-        <span class="risk-badge" style="background-color: {badge_bg}; color: white;">{badge_label}</span>
-        <div style="color: #64748B; font-size: 0.8rem; margin-top: 12px;">Computed via 50-tree Random Forest Ensemble</div>
+    chronic_conditions = [
+        p["hypertension"], p["diabetes"], p["asthma"], p["copd"],
+        p["cardiovascular_disease"], p["cancer_history"], p["kidney_disease"],
+        p["liver_disease"], p["arthritis"], p["mental_health"]
+    ]
+    chronic_count = sum(chronic_conditions)
+    is_high_risk = 1 if (p["risk_score"] > 60 or chronic_count >= 3) else 0
+    had_major_procedure = 1 if p["proc_surgery_count"] > 0 else 0
+
+    row = [
+        p["age"], p["sex"], p["region"], p["urban_rural"], p["income"], p["education"],
+        p["marital_status"], p["employment_status"], p["household_size"], p["dependents"],
+        p["bmi"], p["smoker"], p["alcohol_freq"], p["visits_last_year"],
+        p["hospitalizations_last_3yrs"], p["days_hospitalized_last_3yrs"], p["medication_count"],
+        p["systolic_bp"], p["diastolic_bp"], p["ldl"], p["hba1c"], p["plan_type"],
+        p["network_tier"], p["deductible"], p["copay"], p["policy_term_years"],
+        p["policy_changes_last_2yrs"], p["provider_quality"], p["risk_score"],
+        p["annual_premium"], monthly_premium, p["claims_count"], p["avg_claim_amount"],
+        total_claims_paid, chronic_count, p["hypertension"], p["diabetes"], p["asthma"],
+        p["copd"], p["cardiovascular_disease"], p["cancer_history"], p["kidney_disease"],
+        p["liver_disease"], p["arthritis"], p["mental_health"], p["proc_imaging_count"],
+        p["proc_surgery_count"], p["proc_physio_count"], p["proc_consult_count"],
+        p["proc_lab_count"], is_high_risk, had_major_procedure
+    ]
+
+    if model is not None:
+        try:
+            df = pd.DataFrame([row], columns=ORDERED_FEATURES)
+            val = float(model.predict(df)[0])
+        except Exception:
+            val = float(model.predict(np.array([row]))[0])
+    else:
+        val = 3540.50
+
+    return {
+        "prediction": round(val, 2),
+        "chronic_count": chronic_count,
+        "total_claims_paid": total_claims_paid
+    }
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Risk & Claims Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0B0F19; color: #E2E8F0; }
+        .glass-panel { background: #111827; border: 1px solid rgba(255, 255, 255, 0.08); }
+        .glow-accent { box-shadow: 0 0 35px -5px rgba(6, 182, 212, 0.25); }
+        input, select { background-color: #1F2937 !important; border-color: #374151 !important; color: #F3F4F6 !important; }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+    <div class="max-w-7xl mx-auto space-y-6">
+        <!-- Hero Header -->
+        <header class="glass-panel glow-accent rounded-2xl p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-[#0F172A] via-[#111E36] to-[#042F2E]">
+            <div>
+                <span class="text-xs uppercase tracking-wider font-bold text-cyan-400">RandomForest Ensemble Model</span>
+                <h1 class="text-2xl md:text-3xl font-extrabold text-white mt-1">Health Risk & Claims Analytics</h1>
+                <p class="text-slate-400 text-sm mt-1">52-feature inference pipeline with multivariate radar and encounter breakdown</p>
+            </div>
+            <button onclick="runInference()" class="px-6 py-3 bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-slate-950 font-bold rounded-xl shadow-lg transition duration-150">
+                Run Model Simulation
+            </button>
+        </header>
+
+        <!-- Main Dashboard View -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left: Inputs Column -->
+            <div class="lg:col-span-5 space-y-4">
+                <div class="glass-panel rounded-2xl p-5 space-y-4 max-h-[750px] overflow-y-auto pr-3">
+                    <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wide">Patient Parameters</h2>
+                    
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Age</label>
+                            <input id="age" type="number" value="45" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">BMI</label>
+                            <input id="bmi" type="number" step="0.1" value="28.4" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Systolic BP</label>
+                            <input id="systolic_bp" type="number" value="130" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Diastolic BP</label>
+                            <input id="diastolic_bp" type="number" value="85" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">LDL Cholesterol</label>
+                            <input id="ldl" type="number" value="130" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">HbA1c (%)</label>
+                            <input id="hba1c" type="number" step="0.1" value="6.1" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Annual Premium ($)</label>
+                            <input id="annual_premium" type="number" value="4800" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Internal Risk Score</label>
+                            <input id="risk_score" type="number" step="0.5" value="38.5" class="w-full rounded-lg px-3 py-2">
+                        </div>
+                    </div>
+
+                    <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wide pt-2">Clinical Encounters (Counts)</h2>
+                    <div class="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                            <label class="block text-slate-400 mb-1">Imaging</label>
+                            <input id="proc_imaging_count" type="number" value="1" class="w-full rounded-lg px-2 py-1.5">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Surgeries</label>
+                            <input id="proc_surgery_count" type="number" value="0" class="w-full rounded-lg px-2 py-1.5">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Physio</label>
+                            <input id="proc_physio_count" type="number" value="2" class="w-full rounded-lg px-2 py-1.5">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Consults</label>
+                            <input id="proc_consult_count" type="number" value="3" class="w-full rounded-lg px-2 py-1.5">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Labs</label>
+                            <input id="proc_lab_count" type="number" value="4" class="w-full rounded-lg px-2 py-1.5">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-1">Past Claims</label>
+                            <input id="claims_count" type="number" value="2" class="w-full rounded-lg px-2 py-1.5">
+                        </div>
+                    </div>
+
+                    <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wide pt-2">Conditions Active</h2>
+                    <div class="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                        <label class="flex items-center gap-2"><input id="hypertension" type="checkbox" class="rounded"> Hypertension</label>
+                        <label class="flex items-center gap-2"><input id="diabetes" type="checkbox" class="rounded"> Diabetes</label>
+                        <label class="flex items-center gap-2"><input id="asthma" type="checkbox" class="rounded"> Asthma</label>
+                        <label class="flex items-center gap-2"><input id="cardiovascular_disease" type="checkbox" class="rounded"> Cardiovascular</label>
+                        <label class="flex items-center gap-2"><input id="kidney_disease" type="checkbox" class="rounded"> Kidney Disease</label>
+                        <label class="flex items-center gap-2"><input id="smoker" type="checkbox" class="rounded"> Smoker</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Prediction & Visualizations Column -->
+            <div class="lg:col-span-7 space-y-6">
+                <!-- Top Metric Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="glass-panel rounded-2xl p-5 border-l-4 border-cyan-400">
+                        <div class="text-xs uppercase text-slate-400 font-semibold">Predicted Impact</div>
+                        <div id="predValue" class="text-2xl sm:text-3xl font-black text-cyan-400 mt-1">$0.00</div>
+                        <span id="riskBadge" class="inline-block mt-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">Standard Risk</span>
+                    </div>
+                    <div class="glass-panel rounded-2xl p-5 border-l-4 border-emerald-400">
+                        <div class="text-xs uppercase text-slate-400 font-semibold">Active Conditions</div>
+                        <div id="chronicCount" class="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">0</div>
+                        <span class="inline-block mt-2 text-[10px] text-slate-400">Chronic comorbidities</span>
+                    </div>
+                    <div class="glass-panel rounded-2xl p-5 border-l-4 border-violet-400">
+                        <div class="text-xs uppercase text-slate-400 font-semibold">Claims History</div>
+                        <div id="claimsTotal" class="text-2xl sm:text-3xl font-black text-violet-400 mt-1">$2,400</div>
+                        <span class="inline-block mt-2 text-[10px] text-slate-400">Aggregated historical payouts</span>
+                    </div>
+                </div>
+
+                <!-- Charts Container -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-panel rounded-2xl p-4">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wide mb-3">Multivariate Health Footprint</h3>
+                        <div class="h-64 flex items-center justify-center">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="glass-panel rounded-2xl p-4">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wide mb-3">Clinical Procedure Breakdown</h3>
+                        <div class="h-64 flex items-center justify-center">
+                            <canvas id="barChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    """, unsafe_allow_html=True)
 
-with col_metrics:
-    m1, m2, m3 = st.columns(3)
-    m1.metric(label="Patient BMI", value=f"{bmi:.1f}", delta="Elevated" if bmi > 25 else "Normal", delta_color="inverse")
-    m2.metric(label="Total Chronic Conditions", value=chronic_count, delta="High" if chronic_count >= 2 else "Low", delta_color="inverse")
-    m3.metric(label="Prior Claims Total", value=f"${total_claims_paid:,.0f}")
+    <script>
+        let radarChart, barChart;
 
-    # Feature distribution indicator bar
-    fig_gauge = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=risk_score,
-        title={'text': "Composite Risk Index", 'font': {'size': 14, 'color': '#94A3B8'}},
-        gauge={
-            'axis': {'range': [0, 100], 'tickcolor': "#64748B"},
-            'bar': {'color': "#06B6D4"},
-            'bgcolor': "#1E293B",
-            'steps': [
-                {'range': [0, 35], 'color': '#064E3B'},
-                {'range': [35, 70], 'color': '#78350F'},
-                {'range': [70, 100], 'color': '#7F1D1D'}
-            ]
+        function initCharts() {
+            const ctxRadar = document.getElementById('radarChart').getContext('2d');
+            radarChart = new Chart(ctxRadar, {
+                type: 'radar',
+                data: {
+                    labels: ['Cardio/BP', 'Metabolic/BMI', 'Risk Score', 'Policy Cost', 'Procedures'],
+                    datasets: [{
+                        label: 'Patient Index',
+                        data: [65, 50, 40, 30, 45],
+                        backgroundColor: 'rgba(6, 182, 212, 0.25)',
+                        borderColor: '#06B6D4',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#22D3EE'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: { color: '#1F2937' },
+                            grid: { color: '#1F2937' },
+                            pointLabels: { color: '#94A3B8', font: { size: 10 } },
+                            ticks: { display: false, max: 100 }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            barChart = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Imaging', 'Surgery', 'Physio', 'Consults', 'Labs'],
+                    datasets: [{
+                        data: [1, 0, 2, 3, 4],
+                        backgroundColor: ['#38BDF8', '#F43F5E', '#10B981', '#A855F7', '#F59E0B'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#94A3B8' } },
+                        y: { grid: { color: '#1F2937' }, ticks: { color: '#94A3B8' } }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
         }
-    ))
-    fig_gauge.update_layout(height=160, margin=dict(l=20, r=20, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#F8FAFC"))
-    st.plotly_chart(fig_gauge, use_container_width=True)
 
-st.divider()
+        async function runInference() {
+            const payload = {
+                age: parseFloat(document.getElementById('age').value),
+                bmi: parseFloat(document.getElementById('bmi').value),
+                systolic_bp: parseFloat(document.getElementById('systolic_bp').value),
+                diastolic_bp: parseFloat(document.getElementById('diastolic_bp').value),
+                ldl: parseFloat(document.getElementById('ldl').value),
+                hba1c: parseFloat(document.getElementById('hba1c').value),
+                annual_premium: parseFloat(document.getElementById('annual_premium').value),
+                risk_score: parseFloat(document.getElementById('risk_score').value),
+                proc_imaging_count: parseInt(document.getElementById('proc_imaging_count').value),
+                proc_surgery_count: parseInt(document.getElementById('proc_surgery_count').value),
+                proc_physio_count: parseInt(document.getElementById('proc_physio_count').value),
+                proc_consult_count: parseInt(document.getElementById('proc_consult_count').value),
+                proc_lab_count: parseInt(document.getElementById('proc_lab_count').value),
+                claims_count: parseInt(document.getElementById('claims_count').value),
+                hypertension: document.getElementById('hypertension').checked ? 1 : 0,
+                diabetes: document.getElementById('diabetes').checked ? 1 : 0,
+                asthma: document.getElementById('asthma').checked ? 1 : 0,
+                cardiovascular_disease: document.getElementById('cardiovascular_disease').checked ? 1 : 0,
+                kidney_disease: document.getElementById('kidney_disease').checked ? 1 : 0,
+                smoker: document.getElementById('smoker').checked ? 1 : 0
+            };
 
-# ---------------------------------------------------------
-# Graph Analysis Section
-# ---------------------------------------------------------
-st.markdown("### 📊 Clinical & Financial Visualizations")
+            try {
+                const res = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                
+                document.getElementById('predValue').innerText = '$' + data.prediction.toLocaleString('en-US', {minimumFractionDigits: 2});
+                document.getElementById('chronicCount').innerText = data.chronic_count;
+                document.getElementById('claimsTotal').innerText = '$' + data.total_claims_paid.toLocaleString('en-US');
 
-chart_tab1, chart_tab2 = st.columns(2)
+                const badge = document.getElementById('riskBadge');
+                if (data.prediction > 10000) {
+                    badge.className = "inline-block mt-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-800";
+                    badge.innerText = "High Impact";
+                } else if (data.prediction > 4500) {
+                    badge.className = "inline-block mt-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800";
+                    badge.innerText = "Moderate Impact";
+                } else {
+                    badge.className = "inline-block mt-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800";
+                    badge.innerText = "Standard Risk";
+                }
 
-with chart_tab1:
-    # Radar Chart of Normalized Factors
-    categories = ['Cardio/BP', 'Metabolic/BMI', 'Utilization', 'Policy Cost', 'Procedures']
-    
-    bp_norm = min(systolic_bp / 180 * 100, 100)
-    metabolic_norm = min(((bmi / 40) * 50 + (hba1c / 12) * 50), 100)
-    utilization_norm = min(((visits_last_year / 15) * 50 + (days_hospitalized_last_3yrs / 15) * 50), 100)
-    cost_norm = min((annual_premium / 15000) * 100, 100)
-    proc_norm = min(((proc_surgery_count * 20) + (proc_imaging_count * 10)), 100)
+                // Update Visualizations
+                const bpNorm = Math.min((payload.systolic_bp / 180) * 100, 100);
+                const bmiNorm = Math.min((payload.bmi / 40) * 100, 100);
+                const costNorm = Math.min((payload.annual_premium / 12000) * 100, 100);
+                const procSum = Math.min((payload.proc_surgery_count * 25 + payload.proc_imaging_count * 15), 100);
 
-    radar_fig = go.Figure()
-    radar_fig.add_trace(go.Scatterpolar(
-        r=[bp_norm, metabolic_norm, utilization_norm, cost_norm, proc_norm],
-        theta=categories,
-        fill='toself',
-        fillcolor='rgba(6, 182, 212, 0.35)',
-        line=dict(color='#06B6D4', width=2),
-        name='Current Profile'
-    ))
-    radar_fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, 100], gridcolor='#334155', tickfont=dict(size=9, color='#94A3B8')),
-            angularaxis=dict(gridcolor='#334155', linecolor='#334155', tickfont=dict(color='#E2E8F0'))
-        ),
-        showlegend=False,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=330,
-        margin=dict(l=40, r=40, t=30, b=30),
-        title=dict(text="Normalized Profile Footprint", font=dict(color="#E2E8F0", size=14))
-    )
-    st.plotly_chart(radar_fig, use_container_width=True)
+                radarChart.data.datasets[0].data = [bpNorm, bmiNorm, payload.risk_score, costNorm, procSum];
+                radarChart.update();
 
-with chart_tab2:
-    # Procedure & Service Breakdown Bar Chart
-    proc_names = ['Imaging', 'Surgery', 'Physiotherapy', 'Consults', 'Labs']
-    proc_counts = [proc_imaging_count, proc_surgery_count, proc_physio_count, proc_consult_count, proc_lab_count]
-    
-    fig_bar = go.Figure(data=[
-        go.Bar(
-            x=proc_names,
-            y=proc_counts,
-            marker_color=['#38BDF8', '#F43F5E', '#10B981', '#A855F7', '#F59E0B'],
-            opacity=0.9
-        )
-    ])
-    fig_bar.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        height=330,
-        margin=dict(l=20, r=20, t=30, b=30),
-        title=dict(text="Clinical Procedure Counts", font=dict(color="#E2E8F0", size=14)),
-        yaxis=dict(gridcolor="#1E293B", title="Recorded Encounters", tickfont=dict(color="#94A3B8")),
-        xaxis=dict(tickfont=dict(color="#CBD5E1"))
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
+                barChart.data.datasets[0].data = [
+                    payload.proc_imaging_count,
+                    payload.proc_surgery_count,
+                    payload.proc_physio_count,
+                    payload.proc_consult_count,
+                    payload.proc_lab_count
+                ];
+                barChart.update();
+            } catch (e) {
+                console.error("Prediction failed:", e);
+            }
+        }
+
+        window.onload = () => {
+            initCharts();
+            runInference();
+        };
+    </script>
+</body>
+</html>
+"""
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
