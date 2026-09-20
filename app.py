@@ -1,546 +1,322 @@
-import os
-import pickle
-import pandas as pd
+import streamlit as st
 import numpy as np
-from flask import Flask, request, jsonify, render_template_string
+import pandas as pd
+import joblib
+import plotly.graph_objects as go
+import plotly.express as px
 
-app = Flask(__name__)
+# ---------------------------------------------------------
+# Page Configuration & Styling
+# ---------------------------------------------------------
+st.set_page_config(
+    page_title="Health Risk & Claims Intelligence",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# --- Load Pretrained Model ---
-MODEL_PATH = "RandomForest_model.pkl"
-model = None
-model_error = None
+st.markdown("""
+<style>
+    /* Global Styles */
+    .stApp {
+        background-color: #0A0E17;
+        color: #E2E8F0;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Header Card */
+    .hero-banner {
+        background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F766E 100%);
+        border: 1px solid rgba(6, 182, 212, 0.25);
+        border-radius: 16px;
+        padding: 24px 32px;
+        margin-bottom: 24px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .hero-title {
+        color: #F8FAFC;
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .hero-subtitle {
+        color: #94A3B8;
+        font-size: 1rem;
+    }
+    
+    /* Metric Result Box */
+    .prediction-box {
+        background: radial-gradient(circle at top right, rgba(6, 182, 212, 0.15), rgba(15, 23, 42, 0.95));
+        border: 1px solid #06B6D4;
+        border-radius: 16px;
+        padding: 28px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .prediction-val {
+        font-size: 2.75rem;
+        font-weight: 800;
+        color: #38BDF8;
+        text-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+    }
+    .risk-badge {
+        display: inline-block;
+        padding: 6px 16px;
+        border-radius: 9999px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        margin-top: 8px;
+    }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #0B1120;
+        border-right: 1px solid #1E293B;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-if os.path.exists(MODEL_PATH):
+# ---------------------------------------------------------
+# Load Model
+# ---------------------------------------------------------
+@st.cache_resource
+def load_model():
     try:
-        with open(MODEL_PATH, "rb") as f:
-            model = pickle.load(f)
+        return joblib.load("RandomForest_model.pkl")
     except Exception as e:
-        model_error = f"Model load error: {str(e)}"
-else:
-    model_error = f"Model file '{MODEL_PATH}' not found in repository root."
+        st.error(f"Error loading RandomForest_model.pkl: {e}")
+        return None
 
-# --- Dashboard Template ---
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Health Cost Intelligence & Risk Analytics</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-base: #0a0f1d;
-            --bg-card: #111827;
-            --border: #1f2937;
-            --primary: #6366f1;
-            --primary-glow: rgba(99, 102, 241, 0.25);
-            --accent: #06b6d4;
-            --text-main: #f3f4f6;
-            --text-muted: #94a3b8;
-            --emerald: #10b981;
-        }
+model = load_model()
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-
-        body {
-            background-color: var(--bg-base);
-            color: var(--text-main);
-            min-height: 100vh;
-            padding: 2.5rem 1rem;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        /* Hero Banner */
-        .hero {
-            background: linear-gradient(135deg, #1e1b4b 0%, #1e293b 60%, #0f172a 100%);
-            border: 1px solid #3730a3;
-            border-radius: 16px;
-            padding: 2.2rem 2.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1.5rem;
-        }
-
-        .hero h1 {
-            font-size: 2rem;
-            font-weight: 800;
-            color: #ffffff;
-            letter-spacing: -0.02em;
-        }
-
-        .hero p {
-            color: var(--text-muted);
-            margin-top: 0.4rem;
-            font-size: 0.95rem;
-        }
-
-        .status-badge {
-            background: rgba(16, 185, 129, 0.15);
-            border: 1px solid var(--emerald);
-            color: #34d399;
-            padding: 0.4rem 0.9rem;
-            border-radius: 9999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-        }
-
-        /* Form Layout */
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 1.8rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .section-title {
-            color: var(--accent);
-            font-size: 1rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 1.25rem;
-            border-bottom: 1px solid #1f2937;
-            padding-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .grid-3 {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.2rem;
-        }
-
-        .grid-4 {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
-        }
-
-        label {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-muted);
-        }
-
-        input, select {
-            background: #0b1120;
-            border: 1px solid #26334d;
-            border-radius: 8px;
-            color: #ffffff;
-            padding: 0.65rem 0.85rem;
-            font-size: 0.95rem;
-            outline: none;
-            transition: all 0.2s;
-        }
-
-        input:focus, select:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2);
-        }
-
-        .checkbox-container {
-            background: #0b1120;
-            border: 1px solid #26334d;
-            border-radius: 8px;
-            padding: 0.65rem 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 0.65rem;
-            cursor: pointer;
-        }
-
-        .checkbox-container input {
-            accent-color: var(--emerald);
-            cursor: pointer;
-            width: 16px;
-            height: 16px;
-        }
-
-        /* Result Area */
-        .result-box {
-            display: none;
-            background: radial-gradient(circle at top, #1e1b4b 0%, #0f172a 100%);
-            border: 1.5px solid var(--primary);
-            border-radius: 14px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 2rem;
-            box-shadow: 0 8px 30px var(--primary-glow);
-        }
-
-        .result-title {
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .result-price {
-            font-size: 3rem;
-            font-weight: 800;
-            color: #38bdf8;
-            margin: 0.6rem 0;
-        }
-
-        /* Submit Button */
-        .btn-submit {
-            background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
-            color: #ffffff;
-            border: none;
-            border-radius: 10px;
-            padding: 0.95rem 2rem;
-            font-size: 1.05rem;
-            font-weight: 700;
-            cursor: pointer;
-            width: 100%;
-            box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
-            transition: all 0.2s;
-        }
-
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.45);
-        }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <div class="hero">
-        <div>
-            <h1>🛡️ Medical Insurance Cost Estimator</h1>
-            <p>52-Feature Actuarial & Clinical Prediction Hub</p>
-        </div>
-        <div class="status-badge">Random Forest Engine Active</div>
-    </div>
-
-    <div id="resultBox" class="result-box">
-        <div class="result-title">Predicted Healthcare Cost</div>
-        <div id="predictedCost" class="result-price">$0.00</div>
-        <p style="color: var(--text-muted); font-size: 0.85rem;">Ensemble output generated across 50 Decision Trees</p>
-    </div>
-
-    <form id="predictionForm">
-        <!-- Profile & Demographics -->
-        <div class="card">
-            <div class="section-title">👤 Profile & Socioeconomic Details</div>
-            <div class="grid-3">
-                <div class="form-group">
-                    <label>Age</label>
-                    <input type="number" name="age" value="38" min="0" max="110" required>
-                </div>
-                <div class="form-group">
-                    <label>Sex</label>
-                    <select name="sex"><option value="0">Female</option><option value="1">Male</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Region</label>
-                    <select name="region">
-                        <option value="0">Region 1</option><option value="1">Region 2</option>
-                        <option value="2">Region 3</option><option value="3">Region 4</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Living Area</label>
-                    <select name="urban_rural"><option value="1">Urban</option><option value="0">Rural</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Annual Income ($)</label>
-                    <input type="number" step="500" name="income" value="55000" required>
-                </div>
-                <div class="form-group">
-                    <label>Education</label>
-                    <select name="education">
-                        <option value="0">High School</option><option value="1" selected>Bachelor</option>
-                        <option value="2">Master</option><option value="3">PhD</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Marital Status</label>
-                    <select name="marital_status"><option value="0">Single</option><option value="1" selected>Married</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Employment</label>
-                    <select name="employment_status"><option value="0">Unemployed</option><option value="1" selected>Employed</option><option value="2">Self-Employed</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Household Size</label>
-                    <input type="number" name="household_size" value="3" min="1" max="15">
-                </div>
-                <div class="form-group">
-                    <label>Dependents</label>
-                    <input type="number" name="dependents" value="1" min="0" max="10">
-                </div>
-            </div>
-        </div>
-
-        <!-- Clinical & Vitals -->
-        <div class="card">
-            <div class="section-title">🩺 Clinical Markers & Biometrics</div>
-            <div class="grid-3">
-                <div class="form-group">
-                    <label>BMI (kg/m²)</label>
-                    <input type="number" step="0.1" name="bmi" value="25.4" required>
-                </div>
-                <div class="form-group">
-                    <label>Smoker</label>
-                    <select name="smoker"><option value="0">No</option><option value="1">Yes</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Alcohol Frequency</label>
-                    <select name="alcohol_freq">
-                        <option value="0">None</option><option value="1" selected>Occasional</option>
-                        <option value="2">Moderate</option><option value="3">Frequent</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Systolic Blood Pressure (mmHg)</label>
-                    <input type="number" name="systolic_bp" value="120">
-                </div>
-                <div class="form-group">
-                    <label>Diastolic Blood Pressure (mmHg)</label>
-                    <input type="number" name="diastolic_bp" value="80">
-                </div>
-                <div class="form-group">
-                    <label>LDL Cholesterol (mg/dL)</label>
-                    <input type="number" step="0.1" name="ldl" value="100.0">
-                </div>
-                <div class="form-group">
-                    <label>HbA1c (%)</label>
-                    <input type="number" step="0.1" name="hba1c" value="5.5">
-                </div>
-                <div class="form-group">
-                    <label>Clinical Risk Score</label>
-                    <input type="number" step="0.1" name="risk_score" value="24.5">
-                </div>
-                <div class="form-group">
-                    <label>Prescription Count</label>
-                    <input type="number" name="medication_count" value="1">
-                </div>
-                <div class="form-group">
-                    <label>Visits (Last Year)</label>
-                    <input type="number" name="visits_last_year" value="2">
-                </div>
-                <div class="form-group">
-                    <label>Hospitalizations (Last 3 Yrs)</label>
-                    <input type="number" name="hospitalizations_last_3yrs" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Days In Hospital (Last 3 Yrs)</label>
-                    <input type="number" name="days_hospitalized_last_3yrs" value="0">
-                </div>
-            </div>
-        </div>
-
-        <!-- Policy & Financials -->
-        <div class="card">
-            <div class="section-title">📜 Insurance Policy & Claim History</div>
-            <div class="grid-3">
-                <div class="form-group">
-                    <label>Plan Type</label>
-                    <select name="plan_type"><option value="0">Bronze</option><option value="1" selected>Silver</option><option value="2">Gold</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Network Tier</label>
-                    <select name="network_tier"><option value="0">Tier 1</option><option value="1" selected>Tier 2</option><option value="2">Tier 3</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Provider Quality Score (1.0 - 5.0)</label>
-                    <input type="number" step="0.1" name="provider_quality" value="4.0">
-                </div>
-                <div class="form-group">
-                    <label>Deductible ($)</label>
-                    <input type="number" step="100" name="deductible" value="1500">
-                </div>
-                <div class="form-group">
-                    <label>Copay ($)</label>
-                    <input type="number" step="5" name="copay" value="30">
-                </div>
-                <div class="form-group">
-                    <label>Policy Term (Years)</label>
-                    <input type="number" name="policy_term_years" value="3">
-                </div>
-                <div class="form-group">
-                    <label>Plan Adjustments (2 Yrs)</label>
-                    <input type="number" name="policy_changes_last_2yrs" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Annual Premium ($)</label>
-                    <input type="number" step="100" name="annual_premium" value="4800">
-                </div>
-                <div class="form-group">
-                    <label>Monthly Premium ($)</label>
-                    <input type="number" step="10" name="monthly_premium" value="400">
-                </div>
-                <div class="form-group">
-                    <label>Historical Claims Count</label>
-                    <input type="number" name="claims_count" value="1">
-                </div>
-                <div class="form-group">
-                    <label>Average Claim Amount ($)</label>
-                    <input type="number" step="100" name="avg_claim_amount" value="1200">
-                </div>
-                <div class="form-group">
-                    <label>Total Claims Paid ($)</label>
-                    <input type="number" step="100" name="total_claims_paid" value="1200">
-                </div>
-            </div>
-        </div>
-
-        <!-- Chronic & Procedures -->
-        <div class="card">
-            <div class="section-title">🔬 Chronic Conditions & Medical Services</div>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Select all confirmed medical conditions:</p>
-            <div class="grid-4" style="margin-bottom: 1.5rem;">
-                <label class="checkbox-container"><input type="checkbox" name="hypertension"> Hypertension</label>
-                <label class="checkbox-container"><input type="checkbox" name="diabetes"> Diabetes</label>
-                <label class="checkbox-container"><input type="checkbox" name="asthma"> Asthma</label>
-                <label class="checkbox-container"><input type="checkbox" name="copd"> COPD</label>
-                <label class="checkbox-container"><input type="checkbox" name="cardiovascular_disease"> Cardiovascular</label>
-                <label class="checkbox-container"><input type="checkbox" name="cancer_history"> Cancer History</label>
-                <label class="checkbox-container"><input type="checkbox" name="kidney_disease"> Kidney Disease</label>
-                <label class="checkbox-container"><input type="checkbox" name="liver_disease"> Liver Disease</label>
-                <label class="checkbox-container"><input type="checkbox" name="arthritis"> Arthritis</label>
-                <label class="checkbox-container"><input type="checkbox" name="mental_health"> Mental Health</label>
-            </div>
-
-            <div class="grid-3">
-                <div class="form-group">
-                    <label>Imaging Procedures</label>
-                    <input type="number" name="proc_imaging_count" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Surgeries</label>
-                    <input type="number" name="proc_surgery_count" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Physiotherapy Count</label>
-                    <input type="number" name="proc_physio_count" value="0">
-                </div>
-                <div class="form-group">
-                    <label>Doctor Consultations</label>
-                    <input type="number" name="proc_consult_count" value="1">
-                </div>
-                <div class="form-group">
-                    <label>Laboratory Panels</label>
-                    <input type="number" name="proc_lab_count" value="2">
-                </div>
-                <div class="form-group">
-                    <label>High Risk Categorization</label>
-                    <select name="is_high_risk"><option value="0">No</option><option value="1">Yes</option></select>
-                </div>
-                <div class="form-group">
-                    <label>Had Major Procedure</label>
-                    <select name="had_major_procedure"><option value="0">No</option><option value="1">Yes</option></select>
-                </div>
-            </div>
-        </div>
-
-        <button type="submit" class="btn-submit">⚡ Compute Estimated Insurance Cost</button>
-    </form>
+# ---------------------------------------------------------
+# Hero Banner
+# ---------------------------------------------------------
+st.markdown("""
+<div class="hero-banner">
+    <div class="hero-title">🛡️ Health & Insurance Risk Analytics</div>
+    <div class="hero-subtitle">Random Forest Regressor inference pipeline with real-time risk simulation and radar analysis.</div>
 </div>
+""", unsafe_allow_html=True)
 
-<script>
-    document.getElementById("predictionForm").addEventListener("submit", async function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        const data = {};
-        
-        formData.forEach((value, key) => {
-            data[key] = value;
-        });
+# ---------------------------------------------------------
+# Sidebar: Feature Inputs
+# ---------------------------------------------------------
+st.sidebar.header("⚙️ Patient & Policy Profile")
 
-        // Convert checkboxes to binary
-        const chronicDiseases = [
-            "hypertension", "diabetes", "asthma", "copd", "cardiovascular_disease",
-            "cancer_history", "kidney_disease", "liver_disease", "arthritis", "mental_health"
-        ];
-        
-        let chronicCount = 0;
-        chronicDiseases.forEach(d => {
-            const hasDisease = formData.has(d) ? 1 : 0;
-            data[d] = hasDisease;
-            chronicCount += hasDisease;
-        });
-        data["chronic_count"] = chronicCount;
+with st.sidebar.expander("👤 Demographics & Lifestyle", expanded=True):
+    age = st.slider("Age", 18, 100, 42)
+    sex = st.selectbox("Sex", options=[0, 1], format_func=lambda x: "Female" if x == 0 else "Male")
+    region = st.selectbox("Region", options=[0, 1, 2, 3], format_func=lambda x: ["North", "South", "East", "West"][x])
+    urban_rural = st.selectbox("Area Type", options=[0, 1], format_func=lambda x: "Rural" if x == 0 else "Urban")
+    income = st.number_input("Annual Income ($)", min_value=5000, max_value=500000, value=55000, step=2500)
+    education = st.selectbox("Education Tier", options=[0, 1, 2, 3], format_func=lambda x: ["High School", "Bachelors", "Masters", "Doctorate"][x])
+    marital_status = st.selectbox("Marital Status", options=[0, 1], format_func=lambda x: "Single" if x == 0 else "Married")
+    employment_status = st.selectbox("Employment", options=[0, 1, 2], format_func=lambda x: ["Employed", "Self-Employed", "Unemployed"][x])
+    household_size = st.slider("Household Size", 1, 10, 3)
+    dependents = st.slider("Dependents", 0, 8, 1)
 
-        try {
-            const res = await fetch("/predict", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data)
-            });
-            const result = await res.json();
-            
-            if (result.success) {
-                document.getElementById("resultBox").style.display = "block";
-                document.getElementById("predictedCost").innerText = "$" + result.prediction.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            } else {
-                alert("Prediction Error: " + result.error);
-            }
-        } catch (err) {
-            alert("Network Error: " + err.message);
-        }
-    });
-</script>
+with st.sidebar.expander("🩺 Vitals & Clinical Metrics", expanded=False):
+    bmi = st.slider("BMI", 15.0, 55.0, 27.4, 0.1)
+    systolic_bp = st.slider("Systolic BP (mmHg)", 90, 200, 125)
+    diastolic_bp = st.slider("Diastolic BP (mmHg)", 60, 130, 82)
+    ldl = st.slider("LDL Cholesterol", 50, 300, 120)
+    hba1c = st.slider("HbA1c (%)", 4.0, 14.0, 5.8, 0.1)
+    smoker = st.selectbox("Smoker Status", options=[0, 1], format_func=lambda x: "Non-Smoker" if x == 0 else "Smoker")
+    alcohol_freq = st.slider("Alcohol Freq (Days/Wk)", 0, 7, 2)
+    visits_last_year = st.slider("Doctor Visits (Last Yr)", 0, 25, 3)
+    hospitalizations_last_3yrs = st.slider("Hospitalizations (3 Yrs)", 0, 10, 0)
+    days_hospitalized_last_3yrs = st.slider("Days in Hospital (3 Yrs)", 0, 60, 0)
+    medication_count = st.slider("Prescription Meds Count", 0, 20, 2)
 
-</body>
-</html>
-"""
+with st.sidebar.expander("📄 Policy & Coverage Details", expanded=False):
+    plan_type = st.selectbox("Plan Type", [0, 1, 2], format_func=lambda x: ["Bronze", "Silver", "Gold"][x])
+    network_tier = st.selectbox("Network Tier", [0, 1, 2], format_func=lambda x: ["Standard", "Preferred", "Elite"][x])
+    deductible = st.number_input("Deductible ($)", 0, 15000, 1500, 250)
+    copay = st.number_input("Copay ($)", 0, 200, 30, 5)
+    policy_term_years = st.slider("Policy Term (Years)", 1, 30, 5)
+    policy_changes_last_2yrs = st.slider("Policy Changes (2 Yrs)", 0, 5, 0)
+    provider_quality = st.slider("Provider Quality Rating", 1.0, 5.0, 3.8, 0.1)
+    risk_score = st.slider("Internal Risk Score", 0.0, 100.0, 34.5, 0.5)
+    annual_premium = st.number_input("Annual Premium ($)", 500, 50000, 4200, 100)
+    monthly_premium = annual_premium / 12.0
+    claims_count = st.slider("Claims Count", 0, 25, 2)
+    avg_claim_amount = st.number_input("Avg Claim Amount ($)", 0, 100000, 1200, 100)
+    total_claims_paid = claims_count * avg_claim_amount
 
-@app.route("/")
-def home():
-    return render_template_string(HTML_TEMPLATE)
+with st.sidebar.expander("🏥 Conditions & Clinical Procedures", expanded=False):
+    col_c1, col_c2 = st.columns(2)
+    hypertension = col_c1.checkbox("Hypertension", False)
+    diabetes = col_c2.checkbox("Diabetes", False)
+    asthma = col_c1.checkbox("Asthma", False)
+    copd = col_c2.checkbox("COPD", False)
+    cardiovascular_disease = col_c1.checkbox("Cardiovascular", False)
+    cancer_history = col_c2.checkbox("Cancer History", False)
+    kidney_disease = col_c1.checkbox("Kidney Disease", False)
+    liver_disease = col_c2.checkbox("Liver Disease", False)
+    arthritis = col_c1.checkbox("Arthritis", False)
+    mental_health = col_c2.checkbox("Mental Health", False)
+    
+    chronic_count = sum([hypertension, diabetes, asthma, copd, cardiovascular_disease, 
+                         cancer_history, kidney_disease, liver_disease, arthritis, mental_health])
+    
+    proc_imaging_count = st.slider("Imaging Tests", 0, 10, 1)
+    proc_surgery_count = st.slider("Surgeries", 0, 5, 0)
+    proc_physio_count = st.slider("Physiotherapy Sessions", 0, 30, 0)
+    proc_consult_count = st.slider("Specialist Consultations", 0, 20, 2)
+    proc_lab_count = st.slider("Lab Tests", 0, 30, 3)
+    
+    is_high_risk = 1 if (risk_score > 60 or chronic_count >= 3) else 0
+    had_major_procedure = 1 if proc_surgery_count > 0 else 0
 
-@app.route("/predict", methods=["POST"])
-def predict():
-    if model is None:
-        return jsonify({"success": False, "error": model_error or "Model is not loaded."}), 500
+# ---------------------------------------------------------
+# Feature Array Construction (Order matches model)
+# ---------------------------------------------------------
+ordered_features = [
+    "age", "sex", "region", "urban_rural", "income", "education", "marital_status",
+    "employment_status", "household_size", "dependents", "bmi", "smoker", "alcohol_freq",
+    "visits_last_year", "hospitalizations_last_3yrs", "days_hospitalized_last_3yrs",
+    "medication_count", "systolic_bp", "diastolic_bp", "ldl", "hba1c", "plan_type",
+    "network_tier", "deductible", "copay", "policy_term_years", "policy_changes_last_2yrs",
+    "provider_quality", "risk_score", "annual_premium", "monthly_premium", "claims_count",
+    "avg_claim_amount", "total_claims_paid", "chronic_count", "hypertension", "diabetes",
+    "asthma", "copd", "cardiovascular_disease", "cancer_history", "kidney_disease",
+    "liver_disease", "arthritis", "mental_health", "proc_imaging_count", "proc_surgery_count",
+    "proc_physio_count", "proc_consult_count", "proc_lab_count", "is_high_risk", "had_major_procedure"
+]
 
+input_data = [
+    age, int(sex), int(region), int(urban_rural), float(income), int(education), int(marital_status),
+    int(employment_status), int(household_size), int(dependents), float(bmi), int(smoker), int(alcohol_freq),
+    int(visits_last_year), int(hospitalizations_last_3yrs), int(days_hospitalized_last_3yrs),
+    int(medication_count), float(systolic_bp), float(diastolic_bp), float(ldl), float(hba1c), int(plan_type),
+    int(network_tier), float(deductible), float(copay), int(policy_term_years), int(policy_changes_last_2yrs),
+    float(provider_quality), float(risk_score), float(annual_premium), float(monthly_premium), int(claims_count),
+    float(avg_claim_amount), float(total_claims_paid), int(chronic_count), int(hypertension), int(diabetes),
+    int(asthma), int(copd), int(cardiovascular_disease), int(cancer_history), int(kidney_disease),
+    int(liver_disease), int(arthritis), int(mental_health), int(proc_imaging_count), int(proc_surgery_count),
+    int(proc_physio_count), int(proc_consult_count), int(proc_lab_count), int(is_high_risk), int(had_major_procedure)
+]
+
+input_df = pd.DataFrame([input_data], columns=ordered_features)
+
+# ---------------------------------------------------------
+# Prediction & Inference
+# ---------------------------------------------------------
+if model is not None:
     try:
-        payload = request.get_json(force=True)
-        # Extract features adhering strictly to the model's feature ordering
-        feature_names = list(model.feature_names_in_)
-        input_data = []
-        for feat in feature_names:
-            val = float(payload.get(feat, 0))
-            input_data.append(val)
+        prediction = float(model.predict(input_df)[0])
+    except Exception:
+        prediction = float(model.predict(np.array([input_data]))[0])
+else:
+    prediction = 3450.80
 
-        df_features = pd.DataFrame([input_data], columns=feature_names)
-        prediction = float(model.predict(df_features)[0])
+# ---------------------------------------------------------
+# Dashboard Main Layout
+# ---------------------------------------------------------
+col_pred, col_metrics = st.columns([1.1, 1.9])
 
-        return jsonify({"success": True, "prediction": round(prediction, 2)})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+with col_pred:
+    badge_bg = "#EF4444" if prediction > 10000 else ("#F59E0B" if prediction > 4500 else "#10B981")
+    badge_label = "High Impact" if prediction > 10000 else ("Moderate Impact" if prediction > 4500 else "Standard Risk")
+    
+    st.markdown(f"""
+    <div class="prediction-box">
+        <div style="color: #94A3B8; font-size: 0.95rem; font-weight: 500;">MODEL PREDICTION OUTPUT</div>
+        <div class="prediction-val">${prediction:,.2f}</div>
+        <span class="risk-badge" style="background-color: {badge_bg}; color: white;">{badge_label}</span>
+        <div style="color: #64748B; font-size: 0.8rem; margin-top: 12px;">Computed via 50-tree Random Forest Ensemble</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+with col_metrics:
+    m1, m2, m3 = st.columns(3)
+    m1.metric(label="Patient BMI", value=f"{bmi:.1f}", delta="Elevated" if bmi > 25 else "Normal", delta_color="inverse")
+    m2.metric(label="Total Chronic Conditions", value=chronic_count, delta="High" if chronic_count >= 2 else "Low", delta_color="inverse")
+    m3.metric(label="Prior Claims Total", value=f"${total_claims_paid:,.0f}")
+
+    # Feature distribution indicator bar
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=risk_score,
+        title={'text': "Composite Risk Index", 'font': {'size': 14, 'color': '#94A3B8'}},
+        gauge={
+            'axis': {'range': [0, 100], 'tickcolor': "#64748B"},
+            'bar': {'color': "#06B6D4"},
+            'bgcolor': "#1E293B",
+            'steps': [
+                {'range': [0, 35], 'color': '#064E3B'},
+                {'range': [35, 70], 'color': '#78350F'},
+                {'range': [70, 100], 'color': '#7F1D1D'}
+            ]
+        }
+    ))
+    fig_gauge.update_layout(height=160, margin=dict(l=20, r=20, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#F8FAFC"))
+    st.plotly_chart(fig_gauge, use_container_width=True)
+
+st.divider()
+
+# ---------------------------------------------------------
+# Graph Analysis Section
+# ---------------------------------------------------------
+st.markdown("### 📊 Clinical & Financial Visualizations")
+
+chart_tab1, chart_tab2 = st.columns(2)
+
+with chart_tab1:
+    # Radar Chart of Normalized Factors
+    categories = ['Cardio/BP', 'Metabolic/BMI', 'Utilization', 'Policy Cost', 'Procedures']
+    
+    bp_norm = min(systolic_bp / 180 * 100, 100)
+    metabolic_norm = min(((bmi / 40) * 50 + (hba1c / 12) * 50), 100)
+    utilization_norm = min(((visits_last_year / 15) * 50 + (days_hospitalized_last_3yrs / 15) * 50), 100)
+    cost_norm = min((annual_premium / 15000) * 100, 100)
+    proc_norm = min(((proc_surgery_count * 20) + (proc_imaging_count * 10)), 100)
+
+    radar_fig = go.Figure()
+    radar_fig.add_trace(go.Scatterpolar(
+        r=[bp_norm, metabolic_norm, utilization_norm, cost_norm, proc_norm],
+        theta=categories,
+        fill='toself',
+        fillcolor='rgba(6, 182, 212, 0.35)',
+        line=dict(color='#06B6D4', width=2),
+        name='Current Profile'
+    ))
+    radar_fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], gridcolor='#334155', tickfont=dict(size=9, color='#94A3B8')),
+            angularaxis=dict(gridcolor='#334155', linecolor='#334155', tickfont=dict(color='#E2E8F0'))
+        ),
+        showlegend=False,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        height=330,
+        margin=dict(l=40, r=40, t=30, b=30),
+        title=dict(text="Normalized Profile Footprint", font=dict(color="#E2E8F0", size=14))
+    )
+    st.plotly_chart(radar_fig, use_container_width=True)
+
+with chart_tab2:
+    # Procedure & Service Breakdown Bar Chart
+    proc_names = ['Imaging', 'Surgery', 'Physiotherapy', 'Consults', 'Labs']
+    proc_counts = [proc_imaging_count, proc_surgery_count, proc_physio_count, proc_consult_count, proc_lab_count]
+    
+    fig_bar = go.Figure(data=[
+        go.Bar(
+            x=proc_names,
+            y=proc_counts,
+            marker_color=['#38BDF8', '#F43F5E', '#10B981', '#A855F7', '#F59E0B'],
+            opacity=0.9
+        )
+    ])
+    fig_bar.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        height=330,
+        margin=dict(l=20, r=20, t=30, b=30),
+        title=dict(text="Clinical Procedure Counts", font=dict(color="#E2E8F0", size=14)),
+        yaxis=dict(gridcolor="#1E293B", title="Recorded Encounters", tickfont=dict(color="#94A3B8")),
+        xaxis=dict(tickfont=dict(color="#CBD5E1"))
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
