@@ -30,7 +30,7 @@ ORDERED_FEATURES = [
 ]
 
 class PatientPayload(BaseModel):
-    age: float = 42
+    age: float = 45
     sex: int = 1
     region: int = 1
     urban_rural: int = 1
@@ -40,17 +40,17 @@ class PatientPayload(BaseModel):
     employment_status: int = 0
     household_size: int = 3
     dependents: int = 1
-    bmi: float = 27.4
+    bmi: float = 28.4
     smoker: int = 0
     alcohol_freq: int = 2
     visits_last_year: int = 3
     hospitalizations_last_3yrs: int = 0
     days_hospitalized_last_3yrs: int = 0
     medication_count: int = 2
-    systolic_bp: float = 125.0
-    diastolic_bp: float = 82.0
-    ldl: float = 120.0
-    hba1c: float = 5.8
+    systolic_bp: float = 130.0
+    diastolic_bp: float = 85.0
+    ldl: float = 130.0
+    hba1c: float = 6.1
     plan_type: int = 1
     network_tier: int = 1
     deductible: float = 1500.0
@@ -58,8 +58,8 @@ class PatientPayload(BaseModel):
     policy_term_years: int = 5
     policy_changes_last_2yrs: int = 0
     provider_quality: float = 3.8
-    risk_score: float = 34.5
-    annual_premium: float = 4200.0
+    risk_score: float = 38.5
+    annual_premium: float = 4800.0
     claims_count: int = 2
     avg_claim_amount: float = 1200.0
     hypertension: int = 0
@@ -74,9 +74,9 @@ class PatientPayload(BaseModel):
     mental_health: int = 0
     proc_imaging_count: int = 1
     proc_surgery_count: int = 0
-    proc_physio_count: int = 0
-    proc_consult_count: int = 2
-    proc_lab_count: int = 3
+    proc_physio_count: int = 2
+    proc_consult_count: int = 3
+    proc_lab_count: int = 4
 
 @app.post("/predict")
 def predict(payload: PatientPayload):
@@ -383,7 +383,6 @@ def index():
                     badge.innerText = "Standard Risk";
                 }
 
-                // Update Visualizations
                 const bpNorm = Math.min((payload.systolic_bp / 180) * 100, 100);
                 const bmiNorm = Math.min((payload.bmi / 40) * 100, 100);
                 const costNorm = Math.min((payload.annual_premium / 12000) * 100, 100);
