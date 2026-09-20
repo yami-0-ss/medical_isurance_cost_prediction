@@ -1,8 +1,6 @@
-fastapi
-uvicorn
+Flask
 gunicorn
 scikit-learn
 numpy
 pandas
 joblib
-pydantic
