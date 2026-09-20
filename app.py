@@ -2,11 +2,9 @@ import os
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from flask import Flask, request, jsonify, render_template_string
 
-app = FastAPI(title="Risk & Claims Intelligence Dashboard")
+app = Flask(__name__)
 
 # Load model safely
 model = None
@@ -29,110 +27,13 @@ ORDERED_FEATURES = [
     "proc_physio_count", "proc_consult_count", "proc_lab_count", "is_high_risk", "had_major_procedure"
 ]
 
-class PatientPayload(BaseModel):
-    age: float = 45
-    sex: int = 1
-    region: int = 1
-    urban_rural: int = 1
-    income: float = 55000.0
-    education: int = 1
-    marital_status: int = 1
-    employment_status: int = 0
-    household_size: int = 3
-    dependents: int = 1
-    bmi: float = 28.4
-    smoker: int = 0
-    alcohol_freq: int = 2
-    visits_last_year: int = 3
-    hospitalizations_last_3yrs: int = 0
-    days_hospitalized_last_3yrs: int = 0
-    medication_count: int = 2
-    systolic_bp: float = 130.0
-    diastolic_bp: float = 85.0
-    ldl: float = 130.0
-    hba1c: float = 6.1
-    plan_type: int = 1
-    network_tier: int = 1
-    deductible: float = 1500.0
-    copay: float = 30.0
-    policy_term_years: int = 5
-    policy_changes_last_2yrs: int = 0
-    provider_quality: float = 3.8
-    risk_score: float = 38.5
-    annual_premium: float = 4800.0
-    claims_count: int = 2
-    avg_claim_amount: float = 1200.0
-    hypertension: int = 0
-    diabetes: int = 0
-    asthma: int = 0
-    copd: int = 0
-    cardiovascular_disease: int = 0
-    cancer_history: int = 0
-    kidney_disease: int = 0
-    liver_disease: int = 0
-    arthritis: int = 0
-    mental_health: int = 0
-    proc_imaging_count: int = 1
-    proc_surgery_count: int = 0
-    proc_physio_count: int = 2
-    proc_consult_count: int = 3
-    proc_lab_count: int = 4
-
-@app.post("/predict")
-def predict(payload: PatientPayload):
-    p = payload.dict()
-    monthly_premium = p["annual_premium"] / 12.0
-    total_claims_paid = p["claims_count"] * p["avg_claim_amount"]
-    
-    chronic_conditions = [
-        p["hypertension"], p["diabetes"], p["asthma"], p["copd"],
-        p["cardiovascular_disease"], p["cancer_history"], p["kidney_disease"],
-        p["liver_disease"], p["arthritis"], p["mental_health"]
-    ]
-    chronic_count = sum(chronic_conditions)
-    is_high_risk = 1 if (p["risk_score"] > 60 or chronic_count >= 3) else 0
-    had_major_procedure = 1 if p["proc_surgery_count"] > 0 else 0
-
-    row = [
-        p["age"], p["sex"], p["region"], p["urban_rural"], p["income"], p["education"],
-        p["marital_status"], p["employment_status"], p["household_size"], p["dependents"],
-        p["bmi"], p["smoker"], p["alcohol_freq"], p["visits_last_year"],
-        p["hospitalizations_last_3yrs"], p["days_hospitalized_last_3yrs"], p["medication_count"],
-        p["systolic_bp"], p["diastolic_bp"], p["ldl"], p["hba1c"], p["plan_type"],
-        p["network_tier"], p["deductible"], p["copay"], p["policy_term_years"],
-        p["policy_changes_last_2yrs"], p["provider_quality"], p["risk_score"],
-        p["annual_premium"], monthly_premium, p["claims_count"], p["avg_claim_amount"],
-        total_claims_paid, chronic_count, p["hypertension"], p["diabetes"], p["asthma"],
-        p["copd"], p["cardiovascular_disease"], p["cancer_history"], p["kidney_disease"],
-        p["liver_disease"], p["arthritis"], p["mental_health"], p["proc_imaging_count"],
-        p["proc_surgery_count"], p["proc_physio_count"], p["proc_consult_count"],
-        p["proc_lab_count"], is_high_risk, had_major_procedure
-    ]
-
-    if model is not None:
-        try:
-            df = pd.DataFrame([row], columns=ORDERED_FEATURES)
-            val = float(model.predict(df)[0])
-        except Exception:
-            val = float(model.predict(np.array([row]))[0])
-    else:
-        val = 3540.50
-
-    return {
-        "prediction": round(val, 2),
-        "chronic_count": chronic_count,
-        "total_claims_paid": total_claims_paid
-    }
-
-@app.get("/", response_class=HTMLResponse)
-def index():
-    return """
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Health Risk & Claims Intelligence</title>
+    <title>Health Risk & Insurance Intelligence</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -337,20 +238,20 @@ def index():
 
         async function runInference() {
             const payload = {
-                age: parseFloat(document.getElementById('age').value),
-                bmi: parseFloat(document.getElementById('bmi').value),
-                systolic_bp: parseFloat(document.getElementById('systolic_bp').value),
-                diastolic_bp: parseFloat(document.getElementById('diastolic_bp').value),
-                ldl: parseFloat(document.getElementById('ldl').value),
-                hba1c: parseFloat(document.getElementById('hba1c').value),
-                annual_premium: parseFloat(document.getElementById('annual_premium').value),
-                risk_score: parseFloat(document.getElementById('risk_score').value),
-                proc_imaging_count: parseInt(document.getElementById('proc_imaging_count').value),
-                proc_surgery_count: parseInt(document.getElementById('proc_surgery_count').value),
-                proc_physio_count: parseInt(document.getElementById('proc_physio_count').value),
-                proc_consult_count: parseInt(document.getElementById('proc_consult_count').value),
-                proc_lab_count: parseInt(document.getElementById('proc_lab_count').value),
-                claims_count: parseInt(document.getElementById('claims_count').value),
+                age: parseFloat(document.getElementById('age').value) || 45,
+                bmi: parseFloat(document.getElementById('bmi').value) || 28.4,
+                systolic_bp: parseFloat(document.getElementById('systolic_bp').value) || 130,
+                diastolic_bp: parseFloat(document.getElementById('diastolic_bp').value) || 85,
+                ldl: parseFloat(document.getElementById('ldl').value) || 130,
+                hba1c: parseFloat(document.getElementById('hba1c').value) || 6.1,
+                annual_premium: parseFloat(document.getElementById('annual_premium').value) || 4800,
+                risk_score: parseFloat(document.getElementById('risk_score').value) || 38.5,
+                proc_imaging_count: parseInt(document.getElementById('proc_imaging_count').value) || 1,
+                proc_surgery_count: parseInt(document.getElementById('proc_surgery_count').value) || 0,
+                proc_physio_count: parseInt(document.getElementById('proc_physio_count').value) || 2,
+                proc_consult_count: parseInt(document.getElementById('proc_consult_count').value) || 3,
+                proc_lab_count: parseInt(document.getElementById('proc_lab_count').value) || 4,
+                claims_count: parseInt(document.getElementById('claims_count').value) || 2,
                 hypertension: document.getElementById('hypertension').checked ? 1 : 0,
                 diabetes: document.getElementById('diabetes').checked ? 1 : 0,
                 asthma: document.getElementById('asthma').checked ? 1 : 0,
@@ -413,7 +314,105 @@ def index():
 </html>
 """
 
+@app.route("/", methods=["GET", "HEAD"])
+def index():
+    if request.method == "HEAD":
+        return "", 200
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    data = request.get_json(force=True)
+    
+    age = float(data.get("age", 45))
+    sex = int(data.get("sex", 1))
+    region = int(data.get("region", 1))
+    urban_rural = int(data.get("urban_rural", 1))
+    income = float(data.get("income", 55000.0))
+    education = int(data.get("education", 1))
+    marital_status = int(data.get("marital_status", 1))
+    employment_status = int(data.get("employment_status", 0))
+    household_size = int(data.get("household_size", 3))
+    dependents = int(data.get("dependents", 1))
+    bmi = float(data.get("bmi", 28.4))
+    smoker = int(data.get("smoker", 0))
+    alcohol_freq = int(data.get("alcohol_freq", 2))
+    visits_last_year = int(data.get("visits_last_year", 3))
+    hospitalizations_last_3yrs = int(data.get("hospitalizations_last_3yrs", 0))
+    days_hospitalized_last_3yrs = int(data.get("days_hospitalized_last_3yrs", 0))
+    medication_count = int(data.get("medication_count", 2))
+    systolic_bp = float(data.get("systolic_bp", 130.0))
+    diastolic_bp = float(data.get("diastolic_bp", 85.0))
+    ldl = float(data.get("ldl", 130.0))
+    hba1c = float(data.get("hba1c", 6.1))
+    plan_type = int(data.get("plan_type", 1))
+    network_tier = int(data.get("network_tier", 1))
+    deductible = float(data.get("deductible", 1500.0))
+    copay = float(data.get("copay", 30.0))
+    policy_term_years = int(data.get("policy_term_years", 5))
+    policy_changes_last_2yrs = int(data.get("policy_changes_last_2yrs", 0))
+    provider_quality = float(data.get("provider_quality", 3.8))
+    risk_score = float(data.get("risk_score", 38.5))
+    annual_premium = float(data.get("annual_premium", 4800.0))
+    monthly_premium = annual_premium / 12.0
+    claims_count = int(data.get("claims_count", 2))
+    avg_claim_amount = float(data.get("avg_claim_amount", 1200.0))
+    total_claims_paid = claims_count * avg_claim_amount
+
+    hypertension = int(data.get("hypertension", 0))
+    diabetes = int(data.get("diabetes", 0))
+    asthma = int(data.get("asthma", 0))
+    copd = int(data.get("copd", 0))
+    cardiovascular_disease = int(data.get("cardiovascular_disease", 0))
+    cancer_history = int(data.get("cancer_history", 0))
+    kidney_disease = int(data.get("kidney_disease", 0))
+    liver_disease = int(data.get("liver_disease", 0))
+    arthritis = int(data.get("arthritis", 0))
+    mental_health = int(data.get("mental_health", 0))
+
+    chronic_conditions = [
+        hypertension, diabetes, asthma, copd, cardiovascular_disease,
+        cancer_history, kidney_disease, liver_disease, arthritis, mental_health
+    ]
+    chronic_count = sum(chronic_conditions)
+
+    proc_imaging_count = int(data.get("proc_imaging_count", 1))
+    proc_surgery_count = int(data.get("proc_surgery_count", 0))
+    proc_physio_count = int(data.get("proc_physio_count", 2))
+    proc_consult_count = int(data.get("proc_consult_count", 3))
+    proc_lab_count = int(data.get("proc_lab_count", 4))
+
+    is_high_risk = 1 if (risk_score > 60 or chronic_count >= 3) else 0
+    had_major_procedure = 1 if proc_surgery_count > 0 else 0
+
+    row = [
+        age, sex, region, urban_rural, income, education, marital_status,
+        employment_status, household_size, dependents, bmi, smoker, alcohol_freq,
+        visits_last_year, hospitalizations_last_3yrs, days_hospitalized_last_3yrs,
+        medication_count, systolic_bp, diastolic_bp, ldl, hba1c, plan_type,
+        network_tier, deductible, copay, policy_term_years, policy_changes_last_2yrs,
+        provider_quality, risk_score, annual_premium, monthly_premium, claims_count,
+        avg_claim_amount, total_claims_paid, chronic_count, hypertension, diabetes,
+        asthma, copd, cardiovascular_disease, cancer_history, kidney_disease,
+        liver_disease, arthritis, mental_health, proc_imaging_count, proc_surgery_count,
+        proc_physio_count, proc_consult_count, proc_lab_count, is_high_risk, had_major_procedure
+    ]
+
+    if model is not None:
+        try:
+            df = pd.DataFrame([row], columns=ORDERED_FEATURES)
+            val = float(model.predict(df)[0])
+        except Exception:
+            val = float(model.predict(np.array([row]))[0])
+    else:
+        val = 3540.50
+
+    return jsonify({
+        "prediction": round(val, 2),
+        "chronic_count": chronic_count,
+        "total_claims_paid": total_claims_paid
+    })
+
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
+    app.run(host="0.0.0.0", port=port)
