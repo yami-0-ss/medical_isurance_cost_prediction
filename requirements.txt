@@ -1,6 +1,6 @@
-streamlit
+fastapi
+uvicorn
 scikit-learn
 numpy
 pandas
-plotly
 joblib
