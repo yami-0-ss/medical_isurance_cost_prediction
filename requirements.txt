@@ -1,5 +1,6 @@
-Flask
-gunicorn
+streamlit
 scikit-learn
 numpy
 pandas
+plotly
+joblib
